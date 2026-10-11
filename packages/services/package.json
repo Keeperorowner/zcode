@@ -13,6 +13,7 @@
     "./node": "./src/node.ts"
   },
   "scripts": {
+    "build": "tsc",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"
   },

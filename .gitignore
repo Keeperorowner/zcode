@@ -75,3 +75,25 @@ packages/desktop/resources/macos-window-bounds/
 __pycache__/
 *.pyc
 .zcode-runtime
+
+# ---------------------------------------------------------------------------
+# vendor/zcode-cua-helper：官方发行版携带的 Computer Use 原生 Helper 运行时。
+#
+# 上游开源树把 Computer Use 发成 fail-closed 占位包（package.json 里
+# `zcodeCuaPlaceholder: true`），真实 producer 是闭源的，所以开源构建拿不到
+# Helper，Computer Use 整条链路不可用。本仓库从官方 ZCode 安装包的
+# `resources/tools/cua-helper/` 还原该运行时，让源码树能构建出与官方一致的能力。
+#
+# 这里必须显式重新纳入版本控制：上面的 `dist/`、`node_modules/`、
+# `**/build/Release/*.node` 会把这几个目录整体排除，Git 不会 descend 进被忽略的
+# 目录，因此父目录与其内容都要逐层否定。规则顺序不能提前，否则会被前面的忽略规则覆盖。
+# ---------------------------------------------------------------------------
+!vendor/
+!vendor/zcode-cua-helper/
+!vendor/zcode-cua-helper/dist/
+!vendor/zcode-cua-helper/dist/**
+!vendor/zcode-cua-helper/build/
+!vendor/zcode-cua-helper/build/**
+!vendor/zcode-cua-helper/node_modules/
+!vendor/zcode-cua-helper/node_modules/**
+

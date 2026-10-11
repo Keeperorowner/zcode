@@ -1,0 +1,14 @@
+{
+  "name": "@zcode/zcode-cua",
+  "version": "0.6.3",
+  "private": true,
+  "type": "module",
+  "main": "dist/windows-helper.js",
+  "zcodeCuaRuntime": {
+    "schema": 1,
+    "windows": {
+      "entry": "dist/windows-helper.js",
+      "nativeAddon": "build/Release/ax_native.node"
+    }
+  }
+}

@@ -13,6 +13,27 @@
 
 ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Agent。本仓库包含客户端、后端服务、共享 UI，以及 Agent CLI 与运行时源码。
 
+## 关于本仓库（相对上游的改动）
+
+本仓库基于上游 [`zai-org/ZCode`](https://github.com/zai-org/ZCode) **v3.15.1**，并做了两件事：
+
+1. **补齐 Computer Use**。上游开源版把 `@zcode/zcode-cua` 发成 fail-closed 占位包
+   （`zcodeCuaPlaceholder: true`），真实 producer 闭源，因此上游开源构建出来的安装包**不含**
+   Computer Use Helper，该能力整体不可用。本仓库按 `*.d.ts` 契约与官方发行版运行时行为还原了
+   实现体，并把官方发行版的原生 Helper 运行时按字节 vendor 进 `vendor/zcode-cua-helper/`。
+   详见 [docs/COMPUTER-USE-RESTORATION.md](docs/COMPUTER-USE-RESTORATION.md)。
+
+2. **加上云端构建流水线**。`.github/workflows/build.yml` 在 GitHub Actions 上构建 Windows
+   x64 安装包，不依赖任何私有仓库、内网依赖源或本地已安装的 ZCode。
+
+其余部分与上游 v3.15.1 保持一致（含 15 个官方插件源码、`bundled-skills`、native-search
+预编译归档）。上游在 v3.15.1 已把这些补入源码树，本仓库不再重复搬运。
+
+### 许可提示
+
+`vendor/zcode-cua-helper/**` 来自官方 ZCode 发行版，版权归 Z.ai，**仅供个人/教育/非商业使用**。
+详见 [NOTICE.md](NOTICE.md)。商用前请先取得 Z.ai 书面许可。
+
 ## 更新
 
 - **2026-10-16**：更新至 ZCode v3.16.1 版本。

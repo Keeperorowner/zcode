@@ -23,3 +23,10 @@ third-party/inventory.json linguist-generated=true
 
 # Gen UI vendor 快照带 sha256 清单，构建时逐字节校验；autocrlf 改写换行会误报漂移，按字节保真。
 apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/vendor/** -text
+
+# vendor/zcode-cua-helper 是按字节还原的 Computer Use Helper 运行时：
+# `runtime-manifest.json` 对 entry/addon 记录了 SHA-256，`ax_native.node` 是 PE 二进制。
+# 任何行尾规范化（CRLF）或空白裁剪都会让哈希对不上、让 .node 加载失败，
+# 因此整个目录强制按二进制处理，禁止 Git 做任何转换。
+vendor/zcode-cua-helper/** -text -whitespace
+vendor/zcode-cua-helper/** binary linguist-generated=true linguist-vendored=true

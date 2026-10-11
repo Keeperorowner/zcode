@@ -34,6 +34,7 @@
     "./web-remote-relay": "./src/web-remote-relay/index.ts"
   },
   "scripts": {
+    "build": "tsc",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"
   },
