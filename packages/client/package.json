@@ -7,6 +7,7 @@
     "./globals": "./src/globals.d.ts"
   },
   "scripts": {
+    "build": "tsc",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"
   },

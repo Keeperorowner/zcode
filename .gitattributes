@@ -14,3 +14,20 @@ third-party/runtime/*.txt -text -whitespace
 docs/knip/docs/LICENSE -text -whitespace
 docs/knip/docs/licenses/** -text -whitespace
 third-party/inventory.json linguist-generated=true
+
+# Gen UI vendor 快照按 SHA-256 锁定：manifest.json 记录每个文件的 sha256，
+# packages/desktop/scripts/gen-ui-runtime-assets.mjs 在打包时逐字节校验。
+#
+# 修复原因（Windows 构建中断）：这些 .js 未被任何规则覆盖，Windows 上
+# core.autocrlf=true（GitHub windows-latest runner 默认如此）会把它们检出成 CRLF，
+# 哈希随即对不上，报 "Gen UI vendor hash mismatch: floating-ui-core-1.7.3.min.js"
+# 并让 pnpm bundle:desktop 直接失败。上游 CI 只在 Linux 跑，所以一直没暴露。
+# manifest 里的哈希对应 LF 形态，因此这里必须按字节检出，禁止任何行尾转换。
+apps/zcode-cli/packages/visualize-plugin/skills/visualize/assets/vendor/** -text -whitespace
+
+# vendor/zcode-cua-helper 是按字节还原的 Computer Use Helper 运行时：
+# `runtime-manifest.json` 对 entry/addon 记录了 SHA-256，`ax_native.node` 是 PE 二进制。
+# 任何行尾规范化（CRLF）或空白裁剪都会让哈希对不上、让 .node 加载失败，
+# 因此整个目录强制按二进制处理，禁止 Git 做任何转换。
+vendor/zcode-cua-helper/** -text -whitespace
+vendor/zcode-cua-helper/** binary linguist-generated=true linguist-vendored=true

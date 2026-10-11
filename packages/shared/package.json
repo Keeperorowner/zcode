@@ -27,6 +27,7 @@
     "./request-security": "./src/request-security-edition/index.ts"
   },
   "scripts": {
+    "build": "tsc",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix"
   },

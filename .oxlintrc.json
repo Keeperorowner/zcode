@@ -62,6 +62,10 @@
     ".agents/skills",
     "packages/formal-proof",
     "apps/zcode-cli",
-    "docs/electron"
+    "docs/electron",
+    // vendor/ 是从官方发行版还原的第三方构建成品（Helper entry 与 express/sharp 依赖树），
+    // 不是本仓库维护的源码。它们带自己的 upstream 风格，不该被本仓库的 lint 规则约束；
+    // 正确性由 scripts/verify-computer-use-restoration.mjs 的哈希与 PE 校验保证。
+    "vendor"
   ]
 }
