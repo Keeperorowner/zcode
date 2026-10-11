@@ -1,0 +1,157 @@
+name: build
+
+# 云端构建：不依赖任何私有仓库、内网依赖源或本地已安装的 ZCode。
+#
+# 上游开源树把 Computer Use 发成 fail-closed 占位包，真 producer 闭源，所以官方开源构建
+# 拿不到 Helper。本仓库已把该运行时还原进 `vendor/zcode-cua-helper`（见
+# docs/COMPUTER-USE-RESTORATION.md），并补齐了 `@zcode/zcode-cua` 的实现体，
+# 因此这里能构建出与官方发行版能力一致的 Windows 安装包。
+#
+# 触发：
+#   - 手动 workflow_dispatch（默认）
+#   - push 到 main
+# 产物：win-x64 NSIS 安装包 + unpacked 目录。
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_cli:
+        description: "同时构建 zcode CLI/Web 发行包"
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COREPACK_ENABLE_PROJECT_SPEC: "0"
+  # Electron 二进制走公共镜像，避免 CI 拉 GitHub release 超时。
+  ELECTRON_MIRROR: "https://npmmirror.com/mirrors/electron/"
+  ELECTRON_BUILDER_BINARIES_MIRROR: "https://npmmirror.com/mirrors/electron-builder-binaries/"
+  NODE_VERSION: "24.14.0"
+  PNPM_VERSION: "10.33.2"
+
+jobs:
+  verify:
+    name: typecheck + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # CUA 还原的正确性门禁：契约导出面必须齐全，且 vendor 的 Helper 产物必须与
+      # runtime-manifest.json 里的 SHA-256 / PE 架构一致。
+      - name: Verify Computer Use restoration
+        run: node scripts/verify-computer-use-restoration.mjs
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+  desktop-windows:
+    name: desktop win-x64
+    runs-on: windows-latest
+    timeout-minutes: 120
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 桌面安装包只需要本机平台资源；跳过跨平台 remote 资产准备，显著缩短 CI 时间。
+      - name: Prepare desktop runtime assets
+        env:
+          ZCODE_SKIP_REMOTE_ASSETS: "1"
+        run: pnpm prepare:desktop-runtime
+
+      # 单独跑一次 Helper 暂存，让它在日志里留下 manifest 与 PE 架构，便于排查。
+      - name: Stage Computer Use helper
+        run: pnpm --filter @zcode/desktop prepare:windows-cua-helper
+
+      - name: Build desktop (win-x64)
+        # ZCODE_ENV=production 决定 productName 取「ZCode」、产物名不带 _TEST 后缀、
+        # 后端走生产端点（见 packages/desktop/scripts/desktop-product-identity.mjs）。
+        env:
+          ZCODE_ENV: production
+          ZCODE_SKIP_REMOTE_ASSETS: "1"
+        run: pnpm bundle:desktop -- --os win --arch x64
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zcode-desktop-win-x64
+          path: |
+            packages/desktop/dist/*.exe
+            packages/desktop/dist/*.blockmap
+            packages/desktop/dist/latest.yml
+            packages/desktop/dist/win-unpacked/**
+          if-no-files-found: error
+          retention-days: 14
+
+  zcode-cli:
+    name: zcode CLI distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: verify
+    # CLI 发行包是附加产物；SEA 打包对 workspace 产物顺序较敏感，失败不阻断主产物。
+    continue-on-error: true
+    if: github.event_name == 'push' || inputs.build_cli
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 不在这里跑仓库根 `pnpm build`（`pnpm -r build`）：它会递归构建全部 workspace 包，
+      # 包括与 CLI 发行包无关、且在本仓库当前状态下构建失败的 packages/web-share，
+      # 让整个 job 红掉。SEA 打包需要的 dist 由 build:zcode 自己准备 ——
+      # 它先执行 `pnpm --filter "@zcode/cli..." build`，会把 cli 及其 workspace 依赖
+      # （@zcode/shared、@zcode/services、@zcode/client 等）一并构建出 dist。
+      - name: Build zcode CLI distribution
+        env:
+          ZCODE_DIST_BASE_URL: https://example.invalid/zcode/
+        run: pnpm build:zcode --base-url https://example.invalid/zcode/
+
+      - name: Upload zcode CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: zcode-cli-dist
+          path: dist/zcode/
+          if-no-files-found: error
+          retention-days: 14
