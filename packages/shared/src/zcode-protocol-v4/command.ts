@@ -1,9 +1,14 @@
+/* oxlint-disable max-lines -- zcode-oss: rewindConversation/unrewindConversation 命令与上游 v3.15.1 新命令并存使其略过 400 行。 */
 import { createSessionRequestedConfigSchema } from "./create-session-config.js";
 import { localTtftContextSchema, localTtftClockSchema } from "../localTtft.js";
 import { conversationQuotesSchema } from "../conversationSelection.js";
 // Command 层：信封 / ACK / 命令全集 payload。
 // conversation rewind 无独立命令（裁决：= editUserQuery 的 UI 入口）；
 // workspace-only 文件撤销走 applyFileRewind，不截断聊天历史。
+// zcode-oss: begin message-rewind (docs/design/message-rewind.md)
+// 上 fork 追加 rewindConversation：任意历史 user 消息的对话级回滚（不重发、不限
+// latest）；editUserQuery 的 latest-only 守卫与语义保持原样不动。
+// zcode-oss: end
 import { z } from "zod";
 import { conversationRowTargetSchema, timestampSchema } from "./core.js";
 import { attachmentRefSchema } from "./attachment-ref.js";
@@ -186,6 +191,19 @@ export const commandPayloadSchemas = {
   retryTurn: z.object({ target: conversationRowTargetSchema }),
   // （2026-09-12）：原 setToolWidgetState / setSessionPluginUiState 已删除——插件 UI widgetState
   // 回退为宿主 renderer 内存保存，不再写 CLI 会话存储；模型可见信息改走 ui/update-model-context。
+  // zcode-oss: begin message-rewind
+  // 任意历史 user 消息的对话级回滚：branch cut 截断该消息及其后所有消息，
+  // 不重发新输入（区别于 editUserQuery/retryTurn），不限 latest。
+  rewindConversation: z.object({
+    target: conversationRowTargetSchema,
+    // 缺省 preserve：仅截断对话分支，不动工作区文件。
+    // rewind = 同时恢复该轮文件；Phase 2（agent 侧全量快照）完成前 CLI 侧拒绝。
+    workspaceMode: z.enum(["preserve", "rewind"]).optional(),
+  }),
+  // zcode-oss: end
+  // zcode-oss: message-rewind Phase 3 —— redo：撤销最近一次 rewindConversation，
+  // 恢复其全部效果（截断的消息分支 + 撤销时的文件回滚）。新 prompt 后 CLI 侧拒绝。
+  unrewindConversation: z.object({}),
   setAssistantFeedback: z.object({
     target: conversationRowTargetSchema,
     feedback: z.enum(["like", "dislike"]).nullable(),
@@ -317,6 +335,10 @@ export const COMMANDS_REQUIRING_BASE_REVISION: ReadonlySet<CommandType> = new Se
   "forkAssistant",
   "editUserQuery",
   "retryTurn",
+  // zcode-oss: message-rewind —— CAS 同档命令，防并发窗口误截断。
+  "rewindConversation",
+  // zcode-oss: message-rewind Phase 3
+  "unrewindConversation",
   "setAssistantFeedback",
   "sendQueuedNow",
   "editQueueItem",
@@ -335,6 +357,8 @@ export const ROW_TARGETING_COMMANDS: ReadonlySet<CommandType> = new Set([
   "forkAssistant",
   "editUserQuery",
   "retryTurn",
+  // zcode-oss: message-rewind
+  "rewindConversation",
   "setAssistantFeedback",
   "setHighspeedMetrics",
 ]);
@@ -412,6 +436,14 @@ export const commandResultSchema = z.discriminatedUnion("type", [
     applied: z.boolean(),
     preview: v4ConversationFileRewindPreviewResultSchema,
     response: z.string(),
+  }),
+  z.object({
+    // zcode-oss: message-rewind Phase 3 —— redo ACK：恢复的消息数与文件数供横幅展示。
+    type: z.literal("unrewindConversation"),
+    restoredMessageCount: z.number().int().nonnegative(),
+    filesRestored: z.number().int().nonnegative(),
+    // zcode-oss D1：redo 后 journal 剩余条目数；>0 时 UI 横幅继续提供重做入口。
+    entriesRemaining: z.number().int().nonnegative().optional(),
   }),
   z.object({
     type: z.literal("editUserQuery"),

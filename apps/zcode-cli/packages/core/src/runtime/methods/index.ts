@@ -1,4 +1,5 @@
 import { sampleModel } from "./sample-model.js";
+/* oxlint-disable max-lines -- zcode-oss: 原生 handler 注册表（每组一行 spread/赋值），Phase 2/3 新增快照与 redo 方法注册使其略过 400 行。 */
 import { grantPermissionFullAccess } from "../permission-full-access.js";
 import {
   getSessionShellSelection,
@@ -142,6 +143,18 @@ import { rewindConversationToMessage } from "./rewind-message.js";
 import { rewindCascadeToMessage } from "./rewind-message.js";
 import { rewindToMessage } from "./rewind-message.js";
 import { rewindWorkspaceToMessage } from "./rewind-message.js";
+// zcode-oss: message-rewind Phase 2/3（快照 + redo）
+import {
+  captureTurnStartWorkspaceSnapshot,
+  restoreTurnStartWorkspaceSnapshot,
+  restoreWorkspaceTreeToHash,
+} from "./turn-workspace-snapshot.js";
+import {
+  captureRewindUndoPoint,
+  clearRewindUndoJournal,
+  commitRewindUndoPoint,
+  undoConversationRewind,
+} from "./rewind-revert.js";
 import { restoreWorkspaceCheckpointArtifact } from "./workspace-checkpoints.js";
 import { copySessionMessagesForFork } from "./workspace-checkpoints.js";
 import { listWorkspaceCheckpoints } from "./workspace-checkpoints.js";
@@ -344,6 +357,14 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.rewindToMessage = rewindToMessage;
   proto.rewindCascadeToMessage = rewindCascadeToMessage;
   proto.rewindConversationToMessage = rewindConversationToMessage;
+  // zcode-oss: message-rewind Phase 2
+  proto.captureTurnStartWorkspaceSnapshot = captureTurnStartWorkspaceSnapshot;
+  proto.restoreTurnStartWorkspaceSnapshot = restoreTurnStartWorkspaceSnapshot;
+  proto.restoreWorkspaceTreeToHash = restoreWorkspaceTreeToHash;
+  proto.captureRewindUndoPoint = captureRewindUndoPoint;
+  proto.commitRewindUndoPoint = commitRewindUndoPoint;
+  proto.undoConversationRewind = undoConversationRewind;
+  proto.clearRewindUndoJournal = clearRewindUndoJournal;
   proto.rewindWorkspaceToMessage = rewindWorkspaceToMessage;
   proto.finishUnavailableRewind = finishUnavailableRewind;
   proto.restoreWorkspaceCheckpointArtifact = restoreWorkspaceCheckpointArtifact;

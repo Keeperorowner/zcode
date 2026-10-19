@@ -600,6 +600,10 @@ export const TID_V4_HOOK_DETAILS_TRIGGER = "v4-hook-details-trigger";
 export const TID_V4_HOOK_DETAILS_CONTENT = "v4-hook-details-content";
 /** v4 user 行 edit 按钮（动态后缀为 rowId） */
 export const TID_V4_EDIT = "v4-edit";
+/** zcode-oss: message-rewind —— v4 user 行回滚按钮（动态后缀为 rowId） */
+export const TID_V4_REWIND = "v4-rewind";
+/** zcode-oss: message-rewind —— v4 user 行回滚(含工作区文件)按钮（动态后缀为 rowId） */
+export const TID_V4_REWIND_FILES = "v4-rewind-files";
 /** v4 user query 编辑输入框（动态后缀为 rowId） */
 export const TID_V4_EDIT_INPUT = "v4-edit-input";
 /** v4 user query 编辑提交按钮（动态后缀为 rowId） */

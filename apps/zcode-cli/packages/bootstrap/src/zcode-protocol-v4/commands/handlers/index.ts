@@ -12,6 +12,10 @@ import { sessionMgmtHandlers } from "./session-mgmt.js";
 import { selectionSideSessionHandlers } from "./selection-side-session.js";
 import { assistantFeedbackHandlers } from "./assistant-feedback.js";
 import { highspeedMetricsHandlers } from "./highspeed-metrics.js";
+// zcode-oss: message-rewind
+import { rewindConversationHandlers } from "./rewind-conversation.js";
+// zcode-oss: message-rewind Phase 3
+import { unrewindConversationHandlers } from "./unrewind-conversation.js";
 
 export const NATIVE_HANDLERS = {
   ...sessionFlowHandlers,
@@ -25,6 +29,9 @@ export const NATIVE_HANDLERS = {
   ...fileRewindHandlers,
   ...assistantFeedbackHandlers,
   ...highspeedMetricsHandlers,
+  // zcode-oss: message-rewind
+  ...rewindConversationHandlers,
+  ...unrewindConversationHandlers,
 } as const;
 
 export type NativeCommandType = keyof typeof NATIVE_HANDLERS;

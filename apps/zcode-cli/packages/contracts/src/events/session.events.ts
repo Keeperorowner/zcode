@@ -46,7 +46,11 @@ import type {
   ModelUsageSummary,
 } from "../model/index.js";
 import { createModelUsageSummary } from "../model/index.js";
-import type { CheckpointCreatedPayload, RewindTriggeredPayload } from "../rewind/index.js";
+import type {
+  CheckpointCreatedPayload,
+  RewindRevertedPayload,
+  RewindTriggeredPayload,
+} from "../rewind/index.js";
 import type { SkillTelemetryMetadata } from "../skills/index.js";
 import type { ModelApiErrorPhase, ModelFailureExceptionKind } from "../telemetry/index.js";
 import type { ToolSideEffectScope } from "../tools/contract.js";
@@ -172,6 +176,8 @@ export const SessionEventType = {
   CompactBoundary: "compact_boundary",
   MicrocompactBoundary: "microcompact_boundary",
   RewindTriggered: "rewind_triggered",
+  // zcode-oss: message-rewind Phase 3 —— rewind 的撤销（redo）。
+  RewindReverted: "rewind_reverted",
   CheckpointCreated: "checkpoint_created",
   TargetChanged: "target_changed",
   TargetCompletionVerification: "target_completion_verification",
@@ -1360,4 +1366,6 @@ export type SessionEventPayload =
   | MicrocompactBoundaryEventPayload
   | CheckpointCreatedPayload
   | RewindTriggeredPayload
+  // zcode-oss: message-rewind Phase 3
+  | RewindRevertedPayload
   | CompactBoundaryPayload;

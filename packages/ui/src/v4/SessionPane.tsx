@@ -24,7 +24,8 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { Hand } from "lucide-react";
+import { Hand, Undo2Icon } from "lucide-react";
+// zcode-oss: message-rewind Phase 3（banner 图标）
 import {
   BUILTIN_MODEL_PROVIDER_IDS,
   buildCustomSupplierKey,
@@ -2920,6 +2921,78 @@ export function SessionPane({
     // 被挡下（会话忙着确认别的、队列暂停待确认）就不是「已交给 ZCode」：抛回弹层，让它留在原处。
     if (result !== "sent") throw new Error(`workflow save request not sent: ${result}`);
   }, []);
+  // zcode-oss: begin message-rewind Phase 3 —— 撤销横幅（重做入口 + 被撤销消息回填输入框）。
+  const [rewindBanner, setRewindBanner] = useState<{
+    baselineMaxRowId: number;
+    filesMode: boolean;
+    messageCount: number;
+    /** >0 = "已重做"模式：横幅继续提供重做入口（连续 redo，D1）。 */
+    redoableCount?: number;
+  } | null>(null);
+  // 新 user 消息出现即作废重做窗口（与 CLI 侧 clearRewindUndoJournal 同语义）。
+  useEffect(() => {
+    if (!rewindBanner || !snapshot) return;
+    const rows = snapshot.rows.window;
+    const hasNewUserInput = rows.some(
+      (row) => row.rowId > rewindBanner.baselineMaxRowId && row.kind === "userInput",
+    );
+    if (hasNewUserInput) setRewindBanner(null);
+  }, [rewindBanner, snapshot]);
+
+  // zcode-oss: begin message-rewind (docs/design/message-rewind.md)
+  // 任意历史 user 消息的对话级回滚：CAS 信封与 handleFork 同构（revision/logEpoch）。
+  // preserve 仅截断对话；rewind 先把工作区整树恢复到该轮开始前（turn 起点全量快照）
+  // 再截断。截断后的时间线由 row.removed 自动收口。
+  const handleRewindConversation = useCallback(
+    (
+      target: ConversationRowTarget,
+      opts?: { workspaceMode: "preserve" | "rewind" },
+    ) => {
+      const current = snapshotRef.current;
+      if (!sessionId || current === null) return;
+      const workspaceMode = opts?.workspaceMode ?? "preserve";
+      void dispatchCommand(
+        "rewindConversation",
+        { target, workspaceMode },
+        sessionId,
+        current.revision,
+        current.logEpoch,
+      ).then((ack) => {
+        if (ack.status !== "accepted" && ack.status !== "duplicate") {
+          logger.warn(`[v4-pane] rewind 被拒绝: ${ack.status} ${ack.reasonCode ?? ""}`);
+          return;
+        }
+        // zcode-oss Phase 3：被撤销的提问回填输入框（"打回最初发送状态"），
+        // 并展示重做横幅——基线 rowId 之后的任何新 user 消息都会作废该窗口。
+        const window = snapshotRef.current?.rows.window ?? [];
+        const undoneRow = window.find((row) => row.rowId === target.rowId);
+        if (undoneRow?.kind === "userInput" && workspaceKey) {
+          // 附件随正文一起回到输入框（复用队列撤回编辑的 ComposerRestoreRequest 管道）。
+          setComposerRestoreRequest({
+            requestId: nextComposerRestoreRequestIdRef.current++,
+            sessionId,
+            workspaceKey,
+            inputKind: "sendText",
+            text: undoneRow.text,
+            attachments: undoneRow.attachments ?? [],
+          });
+        }
+        const baselineMaxRowId = window.reduce((max, row) => Math.max(max, row.rowId), 0);
+        const messageCount = Math.max(
+          1,
+          window.filter((row) => row.rowId >= (undoneRow?.rowId ?? 0)).length,
+        );
+        setRewindBanner({
+          baselineMaxRowId,
+          filesMode: workspaceMode === "rewind",
+          messageCount,
+          redoableCount: 0,
+        });
+      });
+    },
+    [dispatchCommand, sessionId],
+  );
+  // zcode-oss: end
 
   const rowContext = useMemo<ConversationRowRenderContext>(
     () => ({
@@ -2997,6 +3070,9 @@ export function SessionPane({
         runtimeReady && workspaceFileRewindEnabled ? handlePreviewFileRewind : undefined,
       applyFileRewind:
         runtimeReady && workspaceFileRewindEnabled ? handleApplyFileRewind : undefined,
+      // zcode-oss: message-rewind —— 行级可用性由协议 canRewind 裁决，这里只注入能力。
+      // 门控沿用上游 runtimeReady：runtime 未就绪时命令无处可发。
+      rewindConversation: runtimeReady ? handleRewindConversation : undefined,
       readAttachment: runtimeReady ? attachmentRead : undefined,
       readAttachmentRange: runtimeReady ? attachmentReadRange : undefined,
     }),
@@ -3057,6 +3133,8 @@ export function SessionPane({
       handleFetchFileChanges,
       handlePreviewFileRewind,
       handleApplyFileRewind,
+      // zcode-oss: message-rewind
+      handleRewindConversation,
       attachmentRead,
       attachmentReadRange,
     ],
@@ -3906,6 +3984,51 @@ export function SessionPane({
     // 按 cardId 消费：迟到的旧卡回调不能清掉新卡的激活请求。
     setHighspeedActivationCardId((current) => (current === cardId ? null : current));
   }, []);
+
+  // zcode-oss: message-rewind Phase 3 —— redo（撤销的后悔药）。
+  // CAS stale 自动重试一次（撤销后投影 revision 推进与点击存在竞态，stale 按设计静默，
+  // 这里以刷新后的 revision 重发）；其余拒绝 toast 可见化，避免"点了没反应"。
+  const handleUnrewindConversation = useCallback(() => {
+    if (!sessionId) return;
+    const send = (revision?: number) => {
+      const current = snapshotRef.current;
+      if (current === null) return null;
+      return dispatchCommand("unrewindConversation", {}, sessionId, revision ?? current.revision);
+    };
+    void (async () => {
+      const firstAck = await send();
+      if (!firstAck) return;
+      const ack = firstAck.status === "stale" ? ((await send()) ?? firstAck) : firstAck;
+      if (ack.status !== "accepted" && ack.status !== "duplicate") {
+        logger.warn(`[v4-pane] redo 被拒绝: ${ack.status} ${ack.reasonCode ?? ""}`);
+        toast(
+          intl.formatMessage(
+            { id: "chat.rewind.redoRejected" },
+            { reason: ack.reasonCode ?? ack.status },
+          ),
+        );
+        return;
+      }
+      // D1 修复：redo 成功不直接收起横幅——journal 还有剩余撤销点时切换到
+      // "已重做 · 还可重做 N 步"模式（连续 redo 的唯一 UI 入口），栈空才收起。
+      const remaining =
+        ack.result?.type === "unrewindConversation" ? (ack.result.entriesRemaining ?? 0) : 0;
+      if (remaining > 0) {
+        const window = snapshotRef.current?.rows.window ?? [];
+        setRewindBanner({
+          baselineMaxRowId: window.reduce((max, row) => Math.max(max, row.rowId), 0),
+          filesMode: false,
+          messageCount: 0,
+          redoableCount: remaining,
+        });
+      } else {
+        setRewindBanner(null);
+      }
+    })().catch((error) => {
+      logger.warn("[v4-pane] redo 发送失败", error);
+      toast(intl.formatMessage({ id: "chat.rewind.redoFailed" }));
+    });
+  }, [dispatchCommand, intl, sessionId]);
 
   const handleFork = useCallback(
     (target: ConversationRowTarget) => {
@@ -5665,6 +5788,43 @@ export function SessionPane({
           onClosePane={onClosePane}
           workspaceBadge={workspaceBadge}
         />
+
+        {rewindBanner ? (
+          <div
+            data-testid="v4-rewind-banner"
+            className="zcode-oss-rewind-banner mx-4 mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-ui-base text-[var(--color-foreground)]"
+          >
+            <Undo2Icon className="size-4 shrink-0 text-[var(--color-foreground-subtlest)]" />
+            <span className="font-medium">
+              {rewindBanner.redoableCount
+                ? intl.formatMessage(
+                    { id: "chat.rewind.banner.redone" },
+                    { count: rewindBanner.redoableCount },
+                  )
+                : intl.formatMessage(
+                    { id: "chat.rewind.banner.title" },
+                    { count: rewindBanner.messageCount },
+                  )}
+            </span>
+            {rewindBanner.redoableCount ? null : (
+              <span className="text-ui-sm text-[var(--color-foreground-subtlest)]">
+                {rewindBanner.filesMode
+                  ? intl.formatMessage({ id: "chat.rewind.banner.filesRestored" })
+                  : intl.formatMessage({ id: "chat.rewind.banner.filesKept" })}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleUnrewindConversation}
+              className="ml-auto rounded-md border border-[var(--color-border)] px-2 py-1 text-ui-sm font-medium hover:bg-[var(--color-surface-hover)]"
+            >
+              {intl.formatMessage({ id: "chat.rewind.banner.redo" })}
+            </button>
+            <span className="w-full text-ui-xs text-[var(--color-foreground-subtlest)]">
+              {intl.formatMessage({ id: "chat.rewind.banner.hint" })}
+            </span>
+          </div>
+        ) : null}
 
         <div
           ref={conversationLayoutContainerRef}

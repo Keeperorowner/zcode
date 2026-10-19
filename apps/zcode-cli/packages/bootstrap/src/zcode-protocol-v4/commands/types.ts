@@ -151,6 +151,8 @@ export interface V4CommandCoreHost {
    */
   getMessageIdForRow?(sessionId: string, rowId: number): string | null;
   /** row.actions/CommandInbox/handler 共用的唯一 row target resolver。 */
+  /** zcode-oss: message-rewind Phase 3 —— redo 后强制从持久事实重建投影（订阅者 resync 收新快照）。 */
+  forceConversationProjectionRehydrate?(sessionId: string): Promise<void>;
   resolveRowActionTarget?(
     sessionId: string,
     target: ConversationRowTarget,

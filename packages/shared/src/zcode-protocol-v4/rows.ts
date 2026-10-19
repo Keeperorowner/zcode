@@ -25,7 +25,10 @@ const rowBaseFields = {
   visibility: z.literal("visible").optional(),
   createdAt: timestampSchema,
   createdAtSeq: z.number(),
-  // 缺省全 false；只下发为 true 的键。canRewind 不在载荷内（rewind = editUserQuery 的 UI 入口）。
+  // 缺省全 false；只下发为 true 的键。
+  // zcode-oss: begin message-rewind (docs/design/message-rewind.md)
+  // 上游裁决 canRewind 不入载荷（rewind = editUserQuery 的 UI 入口，latest-only）；
+  // 本 fork 为任意历史 user 行追加 canRewind，配合 rewindConversation 命令使用。
   actions: z
     .object({
       canFork: z.literal(true).optional(),
@@ -33,8 +36,10 @@ const rowBaseFields = {
       canRetry: z.literal(true).optional(),
       canRewindFiles: z.literal(true).optional(),
       editDisposition: z.enum(["rewind", "fork"]).optional(),
+      canRewind: z.literal(true).optional(),
     })
     .optional(),
+  // zcode-oss: end
 } as const;
 
 export const rowActionsSchema = rowBaseFields.actions;

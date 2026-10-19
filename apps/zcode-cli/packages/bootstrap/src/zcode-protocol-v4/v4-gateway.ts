@@ -172,6 +172,8 @@ function rowTargetActionForCommand(
     case "editUserQuery":
     case "retryTurn":
     case "applyFileRewind":
+    // zcode-oss: message-rewind
+    case "rewindConversation":
     case "setAssistantFeedback":
     case "setHighspeedMetrics":
       return type;
@@ -987,6 +989,16 @@ export class ConversationV4Gateway {
       await this.hydratePublisher(sessionId, undefined, true);
     }
     await this.waitForProjectionEventCommit(sessionId, eventId);
+  }
+
+  /**
+   * zcode-oss: message-rewind Phase 3 —— redo 后强制从持久事实（按恢复后 revert 状态
+   * 过滤的 durable transcript + 抑制了被撤销 RewindTriggered 的事件流）重建投影；
+   * publisher.rehydrate 会把现有订阅标记 resync 并重置水位，客户端收到全新快照。
+   */
+  async forceConversationProjectionRehydrate(sessionId: string): Promise<void> {
+    this.hydratedSessions.delete(sessionId);
+    await this.hydratePublisher(sessionId, undefined, true);
   }
 
   private ingestNormalizedEvent(sessionId: string, event: SessionEvent): void {

@@ -97,6 +97,19 @@ export type RewindTriggeredPayload = Omit<
   createdMessageId?: MessageId;
 };
 
+// zcode-oss: message-rewind Phase 3 —— rewind 的撤销（redo）事实。
+// 追加进事件日志后：冷合并据此抑制被撤销的 RewindTriggered（该 rewind 视为从未发生），
+// durable transcript（message/part）按恢复后的 revert 状态重建完整分支。
+export interface RewindRevertedPayload {
+  /** 被撤销的那次 rewind 的 rewindId（与 RewindTriggered.rewindId 对应）。 */
+  revertedRewindId: string;
+  /** 撤销后推进到的 branchGeneration。 */
+  branchGeneration: number;
+  restoredMessageCount: number;
+  /** 撤销时是否同时恢复了工作区文件（pre-undo 快照整树还原）。 */
+  filesRestored?: boolean;
+}
+
 export const workspaceCheckpointArtifactSchema = z
   .object({
     version: z.literal(1),

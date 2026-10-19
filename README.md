@@ -15,7 +15,7 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 
 ## 关于本仓库（相对上游的改动）
 
-本仓库基于上游 [`zai-org/ZCode`](https://github.com/zai-org/ZCode) **v3.16.1**，并做了两件事：
+本仓库基于上游 [`zai-org/ZCode`](https://github.com/zai-org/ZCode) **v3.16.1**，并做了三件事：
 
 1. **补齐 Computer Use**。上游开源版把 `@zcode/zcode-cua` 发成 fail-closed 占位包
    （`zcodeCuaPlaceholder: true`），真实 producer 闭源，因此上游开源构建出来的安装包**不含**
@@ -23,7 +23,24 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
    实现体，并把官方发行版的原生 Helper 运行时按字节 vendor 进 `vendor/zcode-cua-helper/`。
    详见 [docs/COMPUTER-USE-RESTORATION.md](docs/COMPUTER-USE-RESTORATION.md)。
 
-2. **加上云端构建流水线**。`.github/workflows/build.yml` 在 GitHub Actions 上构建 Windows
+2. **加上任意消息级回滚 / 撤销 / 重做**。上游的 core 运行时其实已经具备任意消息回滚的原语
+   （`rewindToMessage` / `rewindConversationToMessage` / `rewindCascadeToMessage`），但 v4
+   产品协议**主动下线了入口**——消息卡片上没有回滚按钮，协议里也没有独立的 rewind 命令。
+   本仓库把这条链路接了回去，并补齐了上游没有的两块：
+
+   | 能力 | 表现 |
+   | --- | --- |
+   | 回滚对话 | 消息行上的「回滚到此」按钮，截断该条历史消息及其之后的对话分支（**不限最后一条**） |
+   | 回滚对话和文件 | 第二个按钮，把工作区整树恢复到该轮开始前，连 bash 的副作用一起回滚 |
+   | 撤销回滚（重做） | 回滚后出现横幅，可把对话分支**和文件**一并恢复；被撤销的提问还会回填进输入框 |
+
+   文件回滚基于 agent 侧的 shadow git 全量快照（`git write-tree` 内容寻址），不依赖桌面侧
+   服务。协议侧全部是**加法**（新增 `canRewind` action 键 + 两个新命令），上游的
+   `editUserQuery` latest-only 守卫等既有语义原样不动。
+   详见 [docs/design/message-rewind.md](docs/design/message-rewind.md) 与
+   [docs/rewind-button-any-message.md](docs/rewind-button-any-message.md)。
+
+3. **加上云端构建流水线**。`.github/workflows/build.yml` 在 GitHub Actions 上构建 Windows
    x64 安装包，不依赖任何私有仓库、内网依赖源或本地已安装的 ZCode。
 
 其余部分与上游 v3.16.1 保持一致（含 15 个官方插件源码、`bundled-skills`、native-search
@@ -33,6 +50,9 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 
 `vendor/zcode-cua-helper/**` 来自官方 ZCode 发行版，版权归 Z.ai，**仅供个人/教育/非商业使用**。
 详见 [NOTICE.md](NOTICE.md)。商用前请先取得 Z.ai 书面许可。
+
+回滚功能的设计参照了 [Kilo Code](https://github.com/Kilo-Org/kilo) 的 snapshot /
+unrevert 语义（Apache-2.0 系），实现为独立代码，未复制其源码。
 
 ## 更新
 

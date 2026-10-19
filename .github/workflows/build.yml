@@ -65,6 +65,15 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # 任意消息级回滚（message-rewind）的运行时单测：覆盖 shadow git 快照的整树恢复，
+      # 以及 redo 的 undo journal 与分支代际闸。这些用例位于 apps/zcode-cli 下，
+      # 需要先构建 core 的 workspace 依赖（contracts / dynamic-workflow / shared …）。
+      - name: Build CLI runtime deps
+        run: pnpm --filter "@zcode/core^..." build
+
+      - name: Test message rewind runtime
+        run: pnpm --filter @zcode/core exec vitest run tests/message-rewind-snapshot.test.ts tests/message-rewind-revert.test.ts
+
   desktop-windows:
     name: desktop win-x64
     runs-on: windows-latest

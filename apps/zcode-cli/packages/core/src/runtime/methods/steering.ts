@@ -1,4 +1,7 @@
 import { parseRuntimeInputPresentation } from "@zcode/contracts";
+// zcode-oss: message-rewind Phase 2/3（D2：drain 轮次挂钩）
+import { captureTurnStartWorkspaceSnapshot } from "./turn-workspace-snapshot.js";
+import { clearRewindUndoJournal } from "./rewind-revert.js";
 import {
   unpublishedPermissionGrants,
   recoverPendingPermissionGrant,
@@ -1276,6 +1279,14 @@ async function drainPendingInputUnlocked(
         intent: pendingInput.intent,
       },
     );
+    // zcode-oss: message-rewind Phase 2/3 —— drain 出的排队输入同样是一条真实用户轮：
+    // 必须与 executeTurnCommand 主路径同款挂钩（轮起点快照 + 作废 redo 窗口），
+    // 否则排队轮次无快照可回滚、redo 窗口可跨新消息（D2）。
+    await captureTurnStartWorkspaceSnapshot.call(this, {
+      messageId,
+      traceContext: drainTraceContext,
+    });
+    await clearRewindUndoJournal.call(this);
     messageIds.push(messageId);
     drainedInputs.push({
       pendingInputId: pendingInput.id,

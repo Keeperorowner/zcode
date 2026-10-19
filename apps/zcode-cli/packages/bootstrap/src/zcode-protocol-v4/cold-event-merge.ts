@@ -174,6 +174,8 @@ const MEMORY_ONLY_EVENT_TYPES = new Set<string>([
   SessionEventType.TargetChanged,
   SessionEventType.RewindTriggered,
   SessionEventType.TurnExecutionModelFallback,
+  // zcode-oss: message-rewind Phase 3 —— redo 事实本身也是 memory-only 权威。
+  SessionEventType.RewindReverted,
 ]);
 
 const TRANSCRIPT_DERIVED_EVENT_TYPES = new Set<string>([
@@ -787,7 +789,23 @@ export function mergeColdConversationEvents(input: MergeInput): ColdEventMergeRe
     turnByMessageId,
   );
 
+  // zcode-oss: message-rewind Phase 3 —— 已被 redo 撤销的 RewindTriggered 视为从未发生：
+  // 事件流里剔除后，durable transcript（按恢复后 revert 状态过滤）重建的完整分支不再被截断。
+  const revertedRewindIds = new Set<string>();
+  for (const event of input.memoryEvents) {
+    if (event.type === SessionEventType.RewindReverted) {
+      const rewindId = stringField(event.payload, "revertedRewindId");
+      if (rewindId) revertedRewindIds.add(rewindId);
+    }
+  }
   input.memoryEvents.forEach((event, index) => {
+    if (
+      event.type === SessionEventType.RewindTriggered &&
+      revertedRewindIds.has(String(stringField(event.payload, "rewindId") ?? ""))
+    ) {
+      recordDiagnostic(diagnostics, "cold_merge.durable_event_suppressed", event);
+      return;
+    }
     if (HOOK_LIFECYCLE_EVENT_TYPES.has(event.type)) {
       const invocationId = stringField(event.payload, "hookInvocationId");
       // invocation 扫描会把 startup/resume SessionStart 的临时 runtime turn 修正为

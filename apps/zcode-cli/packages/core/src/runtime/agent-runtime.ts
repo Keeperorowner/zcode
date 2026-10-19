@@ -105,6 +105,10 @@ import type {
   ContinueActiveTargetLoopOptions,
   ConversationBeforeInputForkOptions,
   ConversationRewindResult,
+  // zcode-oss: message-rewind Phase 2/3
+  TurnWorkspaceSnapshotRestoreResult,
+  ConversationRewindRestoreResult,
+  RewindUndoPoint,
   ExecuteToolsOptions,
   ExecuteToolsResult,
   ExecuteTurnOptions,
@@ -706,6 +710,32 @@ export interface AgentRuntime {
     targetMessageId: MessageId;
     traceContext: TraceContext;
   }): Promise<ConversationRewindResult>;
+  // zcode-oss: message-rewind Phase 2 —— turn 起点全量快照（shadow git）。
+  // capture 在用户消息持久化后、工具执行前调用；失败静默降级（不影响 turn）。
+  captureTurnStartWorkspaceSnapshot(options: {
+    messageId: MessageId;
+    traceContext: TraceContext;
+  }): Promise<void>;
+  restoreTurnStartWorkspaceSnapshot(options: {
+    targetMessageId: MessageId;
+    traceContext?: TraceContext;
+  }): Promise<TurnWorkspaceSnapshotRestoreResult>;
+  // zcode-oss: message-rewind D3 —— 把工作区整树恢复到任意 tree hash（失败补偿/redo 用）。
+  restoreWorkspaceTreeToHash(treeHash: string): Promise<TurnWorkspaceSnapshotRestoreResult>;
+  // zcode-oss: message-rewind Phase 3 —— rewind 的撤销/重做（Kilo unrevert 语义）。
+  // capture/commit 环绕一次 rewind；undo = redo；clear 在每个新 prompt 开始时作废窗口。
+  captureRewindUndoPoint(): Promise<RewindUndoPoint | null>;
+  commitRewindUndoPoint(input: {
+    point: RewindUndoPoint;
+    revertedRewindId: string;
+    targetMessageId: MessageId;
+    postRewindActiveMessageCount: number;
+    filesRestored: boolean;
+  }): Promise<void>;
+  undoConversationRewind(options: {
+    traceContext: TraceContext;
+  }): Promise<ConversationRewindRestoreResult>;
+  clearRewindUndoJournal(): Promise<void>;
   previewWorkspaceFileRewind(options?: {
     abortSignal?: AbortSignal;
     targetCheckpointId?: string;

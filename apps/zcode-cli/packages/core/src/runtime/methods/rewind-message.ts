@@ -672,7 +672,8 @@ async function finishUnavailableConversationRewind(
   };
 }
 
-async function rebuildConversationDerivedState(
+// zcode-oss: message-rewind Phase 3 —— 供 rewind-revert.ts（redo）复用的分支重建。
+export async function rebuildConversationDerivedState(
   this: AgentRuntimeInternal,
   options: {
     branchCutAfterMessageId: MessageId;

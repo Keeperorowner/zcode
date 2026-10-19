@@ -199,6 +199,15 @@ export interface ConversationRowRenderContext {
     target: ConversationRowTarget,
   ) => Promise<V4ConversationFileRewindPreviewResult>;
   applyFileRewind?: (target: ConversationRowTarget) => Promise<CommandAck>;
+  // zcode-oss: message-rewind —— 任意历史 user 行的对话级回滚入口（rewindConversation
+  // command）：截断该消息及其后所有对话分支，不重发输入。由宿主 SessionPane 注入，
+  // 行级可用性仍以协议下发的 row.actions.canRewind 为准。
+  // workspaceMode："preserve" 仅截断对话（缺省）；"rewind" 同时把工作区整树恢复到
+  // 该轮开始前（turn 起点全量快照，覆盖 bash 等一切文件副作用）。
+  rewindConversation?: (
+    target: ConversationRowTarget,
+    opts?: { workspaceMode: "preserve" | "rewind" },
+  ) => Promise<CommandAck> | void;
   /** 已发送 image/video 预览；由 pane 绑定的 workspace transport 注入。 */
   readAttachment?: (
     params: ConversationAttachmentReadParams,

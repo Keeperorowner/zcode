@@ -345,6 +345,8 @@ export type ConversationRowTargetAction =
   | "applyFileRewind"
   | "fileChanges"
   | "fileRewindPreview"
+  // zcode-oss: message-rewind —— 任意历史 user 行的对话级回滚入口。
+  | "rewindConversation"
   | "setAssistantFeedback"
   | "setHighspeedMetrics";
 
@@ -818,6 +820,34 @@ export class ProductProjection {
       }
       return { ok: true, action, row, editTarget };
     }
+    // zcode-oss: begin message-rewind (docs/design/message-rewind.md)
+    // rewindConversation 不做 latest-only：target 必须是 realUser 行、row.actions.canRewind
+    // 已下发、且 entity 在历史登记表中。不经过 resolveEditTargetByEntityId（它有
+    // currentEditableEntityId 的 latest-only 闸），直接查 editTargetByEntityId 历史表。
+    if (action === "rewindConversation") {
+      if (row.kind !== "userInput" || row.origin !== "realUser" || row.actions?.canRewind !== true) {
+        return {
+          ok: false,
+          status: "rejected",
+          reasonCode: "guard.actionUnavailable",
+        };
+      }
+      const rewindTarget = this.editTargetByEntityId.get(target.entityId);
+      if (!rewindTarget) {
+        return {
+          ok: false,
+          status: "rejected",
+          reasonCode: "guard.actionUnavailable",
+        };
+      }
+      return {
+        ok: true,
+        action,
+        row,
+        editTarget: { ...rewindTarget, intent: { ...rewindTarget.intent } },
+      };
+    }
+    // zcode-oss: end
     if (action === "retryTurn") {
       const messageId = this.messageIdByRowId.get(row.rowId);
       const userRow = this.snapshot.rows.window.find(
@@ -1344,6 +1374,19 @@ export class ProductProjection {
           delete nextActions.canEdit;
           delete nextActions.editDisposition;
         }
+        // zcode-oss: begin message-rewind
+        // rewind 不做 latest-only：所有已登记 editTarget 的 realUser 行都下发 canRewind。
+        // 运行中的轮不隐藏入口（handler 会先 preempt 再截断，与 editUserQuery 同语义）；
+        // compact 进行中沿用 edit 的闸（!compactActive）。
+        const rewindEntityId = this.entityIdByRowId.get(row.rowId);
+        const canRewind =
+          row.origin === "realUser" &&
+          !compactActive &&
+          rewindEntityId !== undefined &&
+          this.editTargetByEntityId.has(rewindEntityId);
+        if (canRewind) nextActions.canRewind = true;
+        else delete nextActions.canRewind;
+        // zcode-oss: end
       } else {
         if (row.rowId === latestRetryableRowId) nextActions.canRetry = true;
         else delete nextActions.canRetry;
