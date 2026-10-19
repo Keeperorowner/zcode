@@ -15,7 +15,7 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 
 ## 关于本仓库（相对上游的改动）
 
-本仓库基于上游 [`zai-org/ZCode`](https://github.com/zai-org/ZCode) **v3.15.1**，并做了两件事：
+本仓库基于上游 [`zai-org/ZCode`](https://github.com/zai-org/ZCode) **v3.16.1**，并做了两件事：
 
 1. **补齐 Computer Use**。上游开源版把 `@zcode/zcode-cua` 发成 fail-closed 占位包
    （`zcodeCuaPlaceholder: true`），真实 producer 闭源，因此上游开源构建出来的安装包**不含**
@@ -26,8 +26,8 @@ ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Age
 2. **加上云端构建流水线**。`.github/workflows/build.yml` 在 GitHub Actions 上构建 Windows
    x64 安装包，不依赖任何私有仓库、内网依赖源或本地已安装的 ZCode。
 
-其余部分与上游 v3.15.1 保持一致（含 15 个官方插件源码、`bundled-skills`、native-search
-预编译归档）。上游在 v3.15.1 已把这些补入源码树，本仓库不再重复搬运。
+其余部分与上游 v3.16.1 保持一致（含 15 个官方插件源码、`bundled-skills`、native-search
+预编译归档）。上游在 v3.15.1 已把这些补入源码树、v3.16.1 继续沿用，本仓库不再重复搬运。
 
 ### 许可提示
 
